@@ -1,0 +1,89 @@
+# ===== Cross-platform Makefile (pip + venv) =====
+
+SHELL := /bin/sh
+
+# Detect Windows vs *nix
+ifeq ($(OS),Windows_NT)
+	PY := .venv\Scripts\python.exe
+	PIP := .venv\Scripts\pip.exe
+	UVICORN := .venv\Scripts\uvicorn.exe
+	ACTIVATE := .venv\Scripts\Activate.ps1
+	VENV_EXISTS := $(wildcard .venv\Scripts\python.exe)
+	PY_BOOT := py -3.13
+else
+	PY := .venv/bin/python
+	PIP := .venv/bin/pip
+	UVICORN := .venv/bin/uvicorn
+	ACTIVATE := source .venv/bin/activate
+	VENV_EXISTS := $(wildcard .venv/bin/python)
+	PY_BOOT := python3
+endif
+
+API_DEPS = "fastapi>=0.111" "uvicorn[standard]>=0.30" "pydantic>=2.7"
+DEV_DEPS = "black>=24.8.0" "ruff>=0.6.9" "mypy>=1.11" "pytest>=8.3"
+
+.PHONY: help setup venv api js-setup js-dev fmt lint type test clean clean-py
+
+help:
+	@echo "Targets:"
+	@echo "  make setup     - Create venv and install deps (API + dev) + JS deps"
+	@echo "  make api       - Run FastAPI dev server (http://localhost:8080/health)"
+	@echo "  make js-setup  - Install JS deps for apps/demo"
+	@echo "  make js-dev    - Run Vite dev server for demo"
+	@echo "  make fmt       - Format Python code with black"
+	@echo "  make lint      - Lint Python with ruff"
+	@echo "  make type      - Type-check with mypy"
+	@echo "  make test      - Run pytest (packages/evals if present)"
+	@echo "  make clean     - Remove venv and node_modules"
+	@echo "  make clean-py  - Remove Python caches"
+
+setup: venv
+	@echo "==> Installing Python deps"
+	$(PIP) install $(API_DEPS) $(DEV_DEPS)
+	@$(MAKE) js-setup
+
+venv:
+ifndef VENV_EXISTS
+	@echo "==> Creating virtualenv"
+	$(PY_BOOT) -m venv .venv
+else
+	@echo "==> Virtualenv already exists"
+endif
+
+api: venv
+	@echo "==> Running FastAPI (Ctrl+C to stop)"
+	$(UVICORN) apps.api.app.main:app --host 0.0.0.0 --port 8080 --reload
+
+js-setup:
+	@echo "==> Installing JS deps (apps/demo)"
+	cd apps/demo && corepack enable && corepack prepare pnpm@9.6.0 --activate && pnpm install
+
+js-dev:
+	@echo "==> Starting Vite dev server (Ctrl+C to stop)"
+	cd apps/demo && pnpm dev
+
+fmt:
+	@echo "==> black"
+	-$(PY) -m black apps packages || true
+
+lint:
+	@echo "==> ruff"
+	-$(PY) -m ruff check apps packages || true
+
+type:
+	@echo "==> mypy"
+	-$(PY) -m mypy apps packages || true
+
+test:
+	@echo "==> pytest"
+	-$(PY) -m pytest -q packages/evals || true
+
+clean:
+	@echo "==> Removing venv and node_modules"
+	@rm -rf .venv || rmdir /S /Q .venv 2>nul || true
+	@rm -rf apps/**/node_modules || true
+
+clean-py:
+	@echo "==> Removing Python caches"
+	@find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+	@find . -name "*.pyc" -delete 2>/dev/null || true
