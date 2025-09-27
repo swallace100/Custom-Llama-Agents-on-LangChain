@@ -87,3 +87,35 @@ clean-py:
 	@echo "==> Removing Python caches"
 	@find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 	@find . -name "*.pyc" -delete 2>/dev/null || true
+
+
+.PHONY: lock sync install-all
+
+# Cross-platform activation + pip-compile via python -m (avoids PATH quirks)
+ifeq ($(OS),Windows_NT)
+	ACT := . ./.venv/Scripts/activate;
+else
+	ACT := . ./.venv/bin/activate;
+endif
+PIP_COMPILE := $(PY) -m piptools compile
+
+lock:
+	$(ACT) \
+	$(PIP_COMPILE) --strip-extras apps/api/requirements.in        -o apps/api/requirements.txt && \
+	$(PIP_COMPILE) --strip-extras packages/agents/requirements.in -o packages/agents/requirements.txt && \
+	$(PIP_COMPILE) --strip-extras packages/tools/requirements.in  -o packages/tools/requirements.txt && \
+	$(PIP_COMPILE) --strip-extras packages/memory/requirements.in -o packages/memory/requirements.txt && \
+	$(PIP_COMPILE) --strip-extras packages/evals/requirements.in  -o packages/evals/requirements.txt && \
+	$(PIP_COMPILE) --strip-extras requirements-dev.in             -o requirements-dev.txt
+
+sync:
+	$(ACT) \
+	pip install -r apps/api/requirements.txt && \
+	pip install -r packages/agents/requirements.txt && \
+	pip install -r packages/tools/requirements.txt && \
+	pip install -r packages/memory/requirements.txt && \
+	pip install -r packages/evals/requirements.txt && \
+	pip install -r requirements-dev.txt
+
+install-all: venv lock sync
+
