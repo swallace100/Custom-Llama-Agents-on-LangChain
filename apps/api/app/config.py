@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     mongo_host: str = Field("localhost", env="MONGO_HOST")
     mongo_port: int = Field(27017, env="MONGO_PORT")
 
+    chroma_host: str = Field("localhost", env="CHROMA_HOST")
+    chroma_port: int = Field(8001, env="CHROMA_PORT")
+
     # GitHub
     github_token: Optional[str] = Field(None, env="GITHUB_TOKEN")
 
@@ -36,6 +39,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "allow"
 
 
 # singleton for app-wide use
