@@ -26,3 +26,30 @@ See `/packages` for Python libraries, `/apps/api` for the FastAPI service, and `
 
 - Edit `*.in`, then run `make lock` to update the pinned `requirements.txt`.
 - Install exact versions with `make sync` (or `make install-all` on a fresh clone).
+
+## 🚀 Running with LLMs
+
+### Option A: Local (Ollama + Llama 3 8B)
+
+1. Install [Ollama](https://ollama.ai).
+2. Pull the model:
+   ```bash
+   ollama pull llama3:8b-instruct-q4_K_M
+   ```
+3. Copy `.env.example` → `.env` and leave the Ollama block uncommented.
+
+4. Run:
+
+```bash
+   make api
+```
+
+### Cloud (OpenAI / hosted LLaMA)
+
+1. Copy `.env.example` → `.env`.
+2. Uncomment the Cloud section and set your API key.
+3. Run:
+
+```bash
+   make api
+```

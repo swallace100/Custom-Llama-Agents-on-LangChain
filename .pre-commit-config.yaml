@@ -8,8 +8,8 @@ repos:
     rev: v0.13.2
     hooks:
       - id: ruff
-        args: ["--fix"] # also fixes import order (isort)
-      - id: ruff-format # optional; we still keep black as the formatter
+        args: ["--fix", "--exit-non-zero-on-fix"] # auto-fix & fail only if something unfixable
+      - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.18.2
