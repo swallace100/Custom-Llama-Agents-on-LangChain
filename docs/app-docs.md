@@ -21,3 +21,12 @@ pip install -r packages/evals/requirements.txt
 pip install -r requirements-dev.txt
 
 ```
+
+### Implement Pre-commmit and Pre-commit install
+
+```bash
+python -m venv .venv
+pip install pre-commit black ruff mypy
+pre-commit install
+
+```

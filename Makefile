@@ -7,14 +7,12 @@ ifeq ($(OS),Windows_NT)
 	PY := .venv\Scripts\python.exe
 	PIP := .venv\Scripts\pip.exe
 	UVICORN := .venv\Scripts\uvicorn.exe
-	ACTIVATE := .venv\Scripts\Activate.ps1
 	VENV_EXISTS := $(wildcard .venv\Scripts\python.exe)
 	PY_BOOT := py -3.13
 else
 	PY := .venv/bin/python
 	PIP := .venv/bin/pip
 	UVICORN := .venv/bin/uvicorn
-	ACTIVATE := source .venv/bin/activate
 	VENV_EXISTS := $(wildcard .venv/bin/python)
 	PY_BOOT := python3
 endif
@@ -22,7 +20,7 @@ endif
 API_DEPS = "fastapi>=0.111" "uvicorn[standard]>=0.30" "pydantic>=2.7"
 DEV_DEPS = "black>=24.8.0" "ruff>=0.6.9" "mypy>=1.11" "pytest>=8.3"
 
-.PHONY: help setup venv api js-setup js-dev fmt lint type test clean clean-py
+.PHONY: help setup venv api js-setup js-dev fmt lint type test clean clean-py lock sync install-all precommit check
 
 help:
 	@echo "Targets:"
@@ -36,6 +34,10 @@ help:
 	@echo "  make test      - Run pytest (packages/evals if present)"
 	@echo "  make clean     - Remove venv and node_modules"
 	@echo "  make clean-py  - Remove Python caches"
+	@echo "  make lock      - Compile requirements.txt from *.in using pip-tools"
+	@echo "  make sync      - Install pinned versions from requirements.txt"
+	@echo "  make precommit - Run pre-commit hooks on all files"
+	@echo "  make check     - Run fmt, lint, type"
 
 setup: venv
 	@echo "==> Installing Python deps"
@@ -88,34 +90,33 @@ clean-py:
 	@find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 	@find . -name "*.pyc" -delete 2>/dev/null || true
 
+# === Dependency management (pip-tools + pre-commit) ===
 
-.PHONY: lock sync install-all
-
-# Cross-platform activation + pip-compile via python -m (avoids PATH quirks)
-ifeq ($(OS),Windows_NT)
-	ACT := . ./.venv/Scripts/activate;
-else
-	ACT := . ./.venv/bin/activate;
-endif
 PIP_COMPILE := $(PY) -m piptools compile
+PRECOMMIT := $(PY) -m pre_commit
 
 lock:
-	$(ACT) \
-	$(PIP_COMPILE) --strip-extras apps/api/requirements.in        -o apps/api/requirements.txt && \
-	$(PIP_COMPILE) --strip-extras packages/agents/requirements.in -o packages/agents/requirements.txt && \
-	$(PIP_COMPILE) --strip-extras packages/tools/requirements.in  -o packages/tools/requirements.txt && \
-	$(PIP_COMPILE) --strip-extras packages/memory/requirements.in -o packages/memory/requirements.txt && \
-	$(PIP_COMPILE) --strip-extras packages/evals/requirements.in  -o packages/evals/requirements.txt && \
+	@echo "==> Compiling lockfiles with pip-tools"
+	$(PIP_COMPILE) --strip-extras apps/api/requirements.in        -o apps/api/requirements.txt
+	$(PIP_COMPILE) --strip-extras packages/agents/requirements.in -o packages/agents/requirements.txt
+	$(PIP_COMPILE) --strip-extras packages/tools/requirements.in  -o packages/tools/requirements.txt
+	$(PIP_COMPILE) --strip-extras packages/memory/requirements.in -o packages/memory/requirements.txt
+	$(PIP_COMPILE) --strip-extras packages/evals/requirements.in  -o packages/evals/requirements.txt
 	$(PIP_COMPILE) --strip-extras requirements-dev.in             -o requirements-dev.txt
 
 sync:
-	$(ACT) \
-	pip install -r apps/api/requirements.txt && \
-	pip install -r packages/agents/requirements.txt && \
-	pip install -r packages/tools/requirements.txt && \
-	pip install -r packages/memory/requirements.txt && \
-	pip install -r packages/evals/requirements.txt && \
-	pip install -r requirements-dev.txt
+	@echo "==> Installing pinned versions"
+	$(PIP) install -r apps/api/requirements.txt
+	$(PIP) install -r packages/agents/requirements.txt
+	$(PIP) install -r packages/tools/requirements.txt
+	$(PIP) install -r packages/memory/requirements.txt
+	$(PIP) install -r packages/evals/requirements.txt
+	$(PIP) install -r requirements-dev.txt
 
 install-all: venv lock sync
 
+precommit:
+	@echo "==> Running pre-commit hooks"
+	$(PRECOMMIT) run --all-files
+
+check: fmt lint type
