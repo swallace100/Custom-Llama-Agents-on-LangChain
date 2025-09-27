@@ -1,0 +1,25 @@
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile.dev
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./apps/api:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+
+  demo:
+    build:
+      context: .
+      dockerfile: apps/demo/Dockerfile.dev
+    working_dir: /repo/apps/demo
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./apps/demo:/repo/apps/demo
+      - /repo/apps/demo/node_modules
+    command: sh -c "pnpm install && pnpm dev -- --host 0.0.0.0"

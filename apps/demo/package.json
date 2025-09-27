@@ -9,7 +9,13 @@
     "preview": "vite preview --port 8085"
   },
   "devDependencies": {
+    "@types/react": "^19.1.14",
+    "@types/react-dom": "^19.1.9",
+    "typescript": "^5.9.2",
     "vite": "^5.4.0"
   },
-  "dependencies": {}
+  "dependencies": {
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  }
 }

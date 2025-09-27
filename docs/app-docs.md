@@ -30,3 +30,10 @@ pip install pre-commit black ruff mypy
 pre-commit install
 
 ```
+
+### Run Docker
+
+```bash
+docker-compose -f docker-compose.dev.yml up --build
+
+```
