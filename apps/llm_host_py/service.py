@@ -1,3 +1,4 @@
+import time
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List, Literal
@@ -50,7 +51,7 @@ def chat_completions(body: ChatRequest):
     return {
         "id": "chatcmpl-local-phi3",
         "object": "chat.completion",
-        "created": __import__("time").int(time := __import__("time").time()),
+        "created": int(time.time()),
         "model": body.model,
         "choices": [
             {
