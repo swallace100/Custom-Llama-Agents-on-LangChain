@@ -35,19 +35,18 @@ services:
 
   llm:
     build:
-      context: ./apps/llm_host_py       # <-- fixed path
+      context: ./apps/llm_host_py
       dockerfile: Dockerfile
     ports:
       - "7001:7001"
     environment:
-      - CUDA_VISIBLE_DEVICES=0
-      - NVIDIA_VISIBLE_DEVICES=all
-    device_requests:                     # <-- compose-native GPU request
-      - driver: nvidia
-        count: 1
-        capabilities: ["gpu"]
+      - ADAPTERS_DIR=/app/adapters
+      - HF_HOME=/root/.cache/huggingface
+    gpus: all
     volumes:
+      - ./apps/llm_host_py:/app
       - ./apps/llm_host_py/adapters:/app/adapters
+      - ./.hf_cache:/root/.cache/huggingface
     networks: [appnet]
 
 networks:

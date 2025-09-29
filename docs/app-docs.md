@@ -37,3 +37,8 @@ pre-commit install
 docker-compose -f docker-compose.dev.yml up --build
 
 ```
+
+```powershell
+### Compile a requirements.in
+python -m piptools compile requirements.in -o requirements.txt
+```

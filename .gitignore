@@ -64,3 +64,6 @@ logs/
 # === Misc ===
 # Byte-compiled Jupyter notebooks
 *.nbconvert.ipynb
+
+# === LLM ===
+.hf_cache
