@@ -25,3 +25,17 @@ repos:
       - id: check-merge-conflict
       - id: mixed-line-ending
       - id: detect-private-key
+
+  - repo: local
+    hooks:
+      - id: validate-role-datasets
+        name: validate role datasets
+        language: system
+        entry: python
+        args:
+          - packages/evals/datasets/tools/validate.py
+          - packages/evals/datasets/researcher.jsonl
+          - packages/evals/datasets/writer.jsonl
+          - packages/evals/datasets/editor.jsonl
+        pass_filenames: false
+        verbose: true
