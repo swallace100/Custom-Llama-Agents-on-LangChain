@@ -120,3 +120,22 @@ precommit:
 	$(PRECOMMIT) run --all-files
 
 check: fmt lint type
+
+# === Dataset utilities ===
+DATASETS = packages/evals/datasets
+
+.PHONY: datasets-validate datasets-build
+
+# Validate all role datasets against schema
+datasets-validate:
+	python $(DATASETS)/tools/validate.py \
+		$(DATASETS)/researcher.jsonl \
+		$(DATASETS)/writer.jsonl \
+		$(DATASETS)/editor.jsonl
+
+# Convert all role datasets into TRL-style chat JSONL
+datasets-build:
+	@mkdir -p $(DATASETS)/out
+	python $(DATASETS)/tools/to_trl.py $(DATASETS)/out/researcher.chat.jsonl $(DATASETS)/researcher.jsonl
+	python $(DATASETS)/tools/to_trl.py $(DATASETS)/out/writer.chat.jsonl     $(DATASETS)/writer.jsonl
+	python $(DATASETS)/tools/to_trl.py $(DATASETS)/out/editor.chat.jsonl     $(DATASETS)/editor.jsonl
