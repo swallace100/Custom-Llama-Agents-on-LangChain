@@ -20,9 +20,9 @@ Docker dev images
 Why: Easy spin-up.
 DoD: Dockerfiles for api and demo, docker-compose.dev.yml runs locally.
 
-Milestone 1 — Data & model setup (Llama)
+Milestone 1 — Data & model setup (Phi-3)
 
-Choose base Llama + license notes
+Choose base LLM + license notes
 Why: Legal/size/VRAM constraints.
 DoD: decision doc (quantization, context window, inference backend).
 

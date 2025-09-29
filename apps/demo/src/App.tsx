@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 interface HealthResponse {
   ok: boolean;
   env: string;
-  llama_url: string;
+  llm_base_url: string;
 }
 
 export default function App() {
@@ -19,7 +19,7 @@ export default function App() {
 
   return (
     <main style={{ fontFamily: "sans-serif", padding: 24 }}>
-      <h1>Custom Llama Agents — Demo</h1>
+      <h1>Phi-3 Writer Agents Team on LangChain</h1>
       <p>Vite + React + TypeScript container is running.</p>
 
       <h2>API Health</h2>
