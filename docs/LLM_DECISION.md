@@ -2,21 +2,21 @@
 
 ## Goals
 
-- Agents: Researcher / Planner / Coder (tool use, retrieval, planning)
+- Agents: Researcher / Writer / Editor (tool use, retrieval, planning)
 - Constraints: <$X/day infra, single-GPU dev, easy local reproducibility
 - Latency target: P50 <= 1.5s for 256-token outputs
 
 ## Deployment Modes (Provider Toggle)
 
-We support both local Llama inference and hosted APIs via a simple .env switch:
+We support both local Phi-3 inference and hosted APIs via a simple .env switch:
 
-- Local (Ollama / llama.cpp / vLLM):
+- Local (Phi-3 mini host, 4-bit QLoRA):
 
   - Reproducible offline dev.
 
-  - Uses Meta Llama 3.x models with quantization.
+  - Uses Microsoft Phi-3 mini 3.8B Instruct with quantization.
 
-  - Best for hacking and demos.
+  - Best for hacking, testing LangChain agents, and demos without API costs.
 
 - Cloud (OpenAI-compatible APIs):
 
@@ -33,76 +33,83 @@ We support both local Llama inference and hosted APIs via a simple .env switch:
   - Provider is chosen via .env:
 
     ```dotenv
-    LLM_PROVIDER=ollama    # or openai
+    LLM_PROVIDER=openai   # or phi3
     ```
 
 ## Candidate Models
 
-- Llama 3.x Instruct 8B — baseline (good quality/cost)
-- Llama 3.x Instruct 70B — higher quality, multi-GPU or heavy quant
-- (Optional tiny) Llama 3.2 3B/1B — edge/CPU, lower quality
+- Phi-3 mini 3.8B Instruct — default baseline (fast, cheap, MIT license)
+- (Optional tiny) Phi-3 small (1.4B) — edge/CPU, ultra-lightweight, lower quality
+- Cloud: GPT-4o-mini / GPT-4-turbo for higher quality
 
-> We will keep model cards + licenses under `docs/licenses/`.
+> Model cards + licenses will be tracked under `docs/licenses/`.
 
 ## Context Window
 
-- Default: 8k–16k is enough for most agent steps.
-- If we truly need long docs / plans: 32k–128k variants (verify model card).
-- Note: larger context ⇒ larger KV cache ⇒ more VRAM and slower.
+- Default: 4k (Phi-3 mini) is enough for most agent steps.
+- Cloud mode: 8k–32k+ depending on model.
+- Note: larger context ⇒ bigger KV cache ⇒ more VRAM and slower.
 
 ## Quantization & Memory Rough-cuts
 
 Rule of thumb (params × bytes/param, excluding KV cache):
 
-- BF16/FP16 ≈ 2 B/param → 8B ≈ 16 GB; 70B ≈ 140 GB
-- 8-bit ≈ 1 B/param → 8B ≈ 8 GB
-- 4-bit ≈ 0.5 B/param → 8B ≈ 4 GB; 70B ≈ 35 GB
+- BF16/FP16 ≈ 2 B/param → 3.8B ≈ ~8 GB
+- 8-bit ≈ 1 B/param → 3.8B ≈ ~4 GB
+- 4-bit ≈ 0.5 B/param → 3.8B ≈ ~2 GB
 
 KV cache adds ~2× hidden size × layers × sequence length (per batch).
 Long contexts or big batch sizes can dominate VRAM.
 
 ## Backends
 
-- Dev (simple): **Ollama** (GGUF via llama.cpp, one command, CPU/GPU)
-- Dev/CPU: **llama.cpp** (fast quantized CPU/GPU, small footprint)
-- Prod GPU: **vLLM** (paged attention, tensor-parallel, high throughput)
-- Alt GPU: **TGI** (HF Text-Generation-Inference), **TensorRT-LLM** (NVIDIA)
+- Dev (simple): Our own FastAPI `llm_host_py` service (Phi-3 mini + LoRA adapters, OpenAI-compatible endpoint).
+- CPU (optional): `transformers` with 4-bit quantization.
+- Prod GPU: vLLM (paged attention, high throughput) if scaling beyond a single GPU.
+- Alt GPU: TGI (Hugging Face Text-Generation-Inference), TensorRT-LLM (NVIDIA).
 
 ## Our Choice (initial)
 
-- Model: **Llama 3.x Instruct 8B**
+- Model: Model: Microsoft Phi-3 mini 3.8B Instruct (MIT license).
 - Quantization:
-  - Dev laptop/CPU: **GGUF Q4_K_M** via llama.cpp/Ollama
-  - GPU server (A10/A40/4090/RTX 6000): **AWQ/GPTQ 4-bit** via vLLM
-  - If 24 GB+ spare VRAM: try **FP16 8B** for max quality
-- Context: **8k–16k** now; revisit **32k–128k** if agents need longer chains
+  - Dev laptop (RTX 4070 8 GB): 4-bit QLoRA
+  - GPU server: 8-bit or 4-bit via vLLM or TGI
+- Context: 4k (default); revisit longer contexts only if required.
 - Backend:
-  - Local: **Ollama** (pull + run)
-  - Dev/Prod GPU: **vLLM** (Docker, serves OpenAI-compatible API)
+  - Local: FastAPI `llm_host_py` (OpenAI-compatible).
+  - Cloud: OpenAI APIs for production-grade scaling.
 
 ## Inference Endpoints (reference)
 
-### Ollama (local dev)
+### Local (Phi-3 mini host)
 
-- Install and run:
+- Run via Docker Compose:
   - `ollama pull llama3:8b-instruct` # (exact tag per registry)
-  - `ollama run llama3:8b-instruct`
-- OpenAI-compat shim (optional): `ollama serve` + adapters
+
+```bash
+docker compose up -d llm
+```
+
+- Provides OpenAI-compatible API at:
+
+```bash
+POST http://localhost:7001/v1/chat/completions
+```
 
 ### vLLM (GPU)
 
-Docker compose service (example):
+Example service:
 
 ```yaml
 llm:
   image: vllm/vllm-openai:latest
   command: >
-    --model /models/llama-3-8b-instruct
+    --model /models/phi-3-mini-4k-instruct
     --dtype auto
     --gpu-memory-utilization 0.9
-    --max-model-len 8192
+    --max-model-len 4096
   volumes:
-    - ./models/llama-3-8b-instruct:/models/llama-3-8b-instruct
+    - ./models/phi-3-mini-4k-instruct:/models/phi-3-mini-4k-instruct
   ports: ["8000:8000"]
   environment:
     - VLLM_WORKER_MULTIPROC_METHOD=spawn
@@ -112,56 +119,48 @@ llm:
 - Query like OpenAI:
   - `POST http://localhost:8000/v1/chat/completions`
 
-### llama.cpp (CPU/GPU)
-
-- Quantize to GGUF; run:
-
-  - `./main -m ./llama3-8b-instruct-q4_k_m.gguf -c 4096 -ngl 0` # CPU
-
-  -`-ngl 20` to move layers to GPU if available
-
 ## Evals & Guardrails
 
 - Run basic evals on internal prompts before flipping models:
 
-  - Quality: simple task pool (research, plan, code)
+  - Quality: research, plan, code task pool
 
-  - Cost/latency: tokens/s, latency P50/P95, cost per 1k tokens
+  - Cost/latency: tokens/s, latency P50/P95
 
-  - Safety: jailbreak/PII test prompts (blocked tool calls)
+  - Safety: jailbreak/PII prompts, blocked tool calls
 
 - Keep eval harness in `packages/evals/` and record results in this doc.
 
 ## License Notes
 
-- Include the Meta Llama license with this repo under docs/licenses/.
+- Phi-3 models are released under the MIT License
 
-- If hosting weights or derivatives, follow attribution & usage terms.
-
-- Verify any foundation weights’ redistribution terms before publishing images.
+- If we later include Llama or other models, their licenses must also be included under docs/licenses/.
 
 ## Decision
 
-- Adopt Llama 3.x Instruct 8B as default.
+- dopt Phi-3 mini 3.8B as default dev model.
 
 - Backends:
 
-  - Ollama locally, vLLM for GPU server.
+  - Local: llm_host_py (OpenAI-compatible FastAPI).
 
-- Revisit 70B after baseline evals; only promote if quality wins justify infra cost.
+  - Cloud: OpenAI GPT-4o-mini or GPT-4-turbo.
+
+- Revisit larger models (e.g., GPT-4 family, Qwen, Mixtral) if quality gaps emerge.
 
 ### Dual Strategy
 
-- Default Dev: Llama 3.x Instruct 8B via Ollama.
+- Default Dev: Phi-3 mini 3.8B locally (cheap/free, reproducible).
 
 - Optional Cloud: Any OpenAI-compatible model (e.g. GPT-4o, GPT-4-turbo).
 
-- This makes it easy for contributors to clone the repo and run agents without paying for API tokens — while still showing parity with production-grade APIs.
+- This makes it easy for contributors to clone the repo, run agents locally without paying, and still demonstrate parity with production-grade APIs.
 
 ## Open Questions / Next Checkpoint
 
-- Do our agents require >8k context in practice?
+- Do our agents require >4k context in practice?
 
-- Which quantization gives best latency/quality on our hardware?
+- Which quantization (4-bit vs 8-bit) gives best latency/quality tradeoff?
 
 - Budget target per day for sustained usage?

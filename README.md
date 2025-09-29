@@ -1,6 +1,6 @@
-# Custom-Llama-Agents-on-LangChain
+# Custom-Phi-3-Agents-on-LangChain
 
-Monorepo for Llama-trained specialist agents orchestrated by LangChain.
+Monorepo for Phi-3-trained specialist agents orchestrated by LangChain.
 See `/packages` for Python libraries, `/apps/api` for the FastAPI service, and `/apps/demo` for the UI.
 
 ## Quickstart
@@ -20,6 +20,7 @@ See `/packages` for Python libraries, `/apps/api` for the FastAPI service, and `
 - `packages/evals`: Evaluation tasks & test harness
 - `apps/api`: Orchestration service
 - `apps/demo`: React/Vite demo UI
+- `apps/llm_host_py`: Base LLM model and LoRA adapters
 - `infra/`: Dockerfiles & compose
 
 ### Reproducible installs
@@ -29,22 +30,58 @@ See `/packages` for Python libraries, `/apps/api` for the FastAPI service, and `
 
 ## 🚀 Running with LLMs
 
-### Option A: Local (Ollama + Llama 3 8B)
+### Option A: Local (Phi-3 mini 3.8B, 4-bit)
 
-1. Install [Ollama](https://ollama.ai).
-2. Pull the model:
-   ```bash
-   ollama pull llama3:8b-instruct-q4_K_M
+1. Ensure NVIDIA drivers + nvidia-container-toolkit are installed (for GPU in Docker).
+   If you’d rather skip Docker for now, see “Run without Docker” below.
+2. Copy .env.example → .env and keep the Local Phi-3 block:
+
+   ```env
+   LLM_PROVIDER=phi3
+   LLM_BASE_URL=http://localhost:7001
+   LLM_MODEL=microsoft/phi-3-mini-4k-instruct
+   LLM_TEMPERATURE=0.2
+   LLM_CONTEXT=4096
+
    ```
-3. Copy `.env.example` → `.env` and leave the Ollama block uncommented.
 
-4. Run:
+3. Start the Phi-3 host (loads base once; switch LoRA adapters as needed):
+
+   ```bash
+      # with docker-compose (recommended)
+      docker compose up -d llm
+
+   ```
+
+4. Run the API (and demo if you use it):
+
+   ```bash
+      make api
+      # optionally
+      make demo
+
+   ```
+
+#### Run without Docker (dev mode):
 
 ```bash
-   make api
+cd apps/llm_host_py
+pip install -r requirements.txt
+uvicorn service:app --host 0.0.0.0 --port 7001
+# in another terminal:
+make api
+
 ```
 
-### Cloud (OpenAI / hosted LLaMA)
+#### Notes:
+
+- This works comfortably with 8 GB VRAM: Phi-3 mini in 4-bit is the target.
+
+- LoRA adapters live in apps/llm_host_py/adapters/\* and can be hot-swapped without changing .env.
+
+- Keep requests sequential (batch size 1, modest max_new_tokens) for smooth VRAM usage.
+
+### Cloud (OpenAI )
 
 1. Copy `.env.example` → `.env`.
 2. Uncomment the Cloud section and set your API key.

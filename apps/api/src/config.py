@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     # Models / APIs
     openai_api_key: Optional[str] = Field(None, env="OPENAI_API_KEY")
-    llama_server_url: str = Field("http://localhost:8000", env="LLAMA_SERVER_URL")
+    phi_3_server_url: str = Field("http://localhost:7001", env="LLM_BASE_URL")
     embeddings_model: str = Field(
         "sentence-transformers/all-MiniLM-L6-v2", env="EMBEDDINGS_MODEL"
     )
