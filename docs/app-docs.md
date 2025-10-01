@@ -179,3 +179,12 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 pip install bitsandbytes
 
 ```
+
+### Test the chat completion endpoint
+
+```bash
+curl -X POST http://localhost:8000/v1/chat/completions \
+     -H "Content-Type: application/json" \
+     -d '{"model":"phi-3-mini","messages":[{"role":"user","content":"Hello"}],"adapter":"agent_researcher"}'
+
+```
