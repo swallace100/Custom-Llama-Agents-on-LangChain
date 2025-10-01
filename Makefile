@@ -8,7 +8,7 @@ ifeq ($(OS),Windows_NT)
 	PIP := .venv\Scripts\pip.exe
 	UVICORN := .venv\Scripts\uvicorn.exe
 	VENV_EXISTS := $(wildcard .venv\Scripts\python.exe)
-	PY_BOOT := py -3.13
+	PY_BOOT := py -3.11d
 else
 	PY := .venv/bin/python
 	PIP := .venv/bin/pip

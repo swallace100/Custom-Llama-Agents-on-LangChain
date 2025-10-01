@@ -1,28 +1,26 @@
-import time
+# apps/llm_host_py/service.py (snippet)
 from fastapi import FastAPI
 from pydantic import BaseModel
-from typing import List, Literal
-from router import pick_adapter
+from typing import List, Literal, Optional, Any, Dict
 from model_loader import generate
 
-app = FastAPI(title="LLM Host (Phi-3 + LoRA)", version="0.2.0")
+app = FastAPI(title="LLM Host (Phi-3 + LoRA)")
 
 
-# --- OpenAI-compatible /v1/chat/completions ---
 class ChatMessage(BaseModel):
     role: Literal["system", "user", "assistant"]
     content: str
 
 
 class ChatRequest(BaseModel):
-    model: str = "microsoft/phi-3-mini-4k-instruct"  # accepted but ignored for now
+    model: str = "microsoft/phi-3-mini-4k-instruct"
     messages: List[ChatMessage]
     temperature: float = 0.7
     max_tokens: int = 256
+    adapter: Optional[str] = None  # <-- add this
 
 
 def join_messages(msgs: List[ChatMessage]) -> str:
-    # Simple chat-to-prompt conversion; keep it minimal
     lines = []
     for m in msgs:
         prefix = {"system": "System", "user": "User", "assistant": "Assistant"}[m.role]
@@ -32,21 +30,15 @@ def join_messages(msgs: List[ChatMessage]) -> str:
 
 
 @app.post("/v1/chat/completions")
-def chat_completions(body: ChatRequest):
-    # Optional: route adapters by a simple heuristic on the last user message
-    last_user = next(
-        (m.content for m in reversed(body.messages) if m.role == "user"), ""
-    )
-    adapter = pick_adapter(
-        last_user
-    )  # or parse body.model suffix for adapter selection
+def chat_completions(body: ChatRequest) -> Dict[str, Any]:
     prompt = join_messages(body.messages)
     text = generate(
         prompt,
-        adapter=adapter,
+        adapter=body.adapter,  # <-- switch per request
         max_new_tokens=body.max_tokens,
         temperature=body.temperature,
     )
+    import time
 
     return {
         "id": "chatcmpl-local-phi3",
@@ -66,9 +58,3 @@ def chat_completions(body: ChatRequest):
             "total_tokens": None,
         },
     }
-
-
-# Keep your simple health too
-@app.get("/health")
-def health():
-    return {"ok": True}

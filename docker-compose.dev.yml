@@ -42,6 +42,7 @@ services:
     environment:
       - ADAPTERS_DIR=/app/adapters
       - HF_HOME=/root/.cache/huggingface
+      - BASE_MODEL=microsoft/phi-3-mini-4k-instruct
     gpus: all
     volumes:
       - ./apps/llm_host_py:/app
