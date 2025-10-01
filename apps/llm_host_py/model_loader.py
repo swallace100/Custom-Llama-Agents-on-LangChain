@@ -1,66 +1,85 @@
-# apps/llm_host_py/model_loader.py
+from __future__ import annotations
 import os
+import glob
+from typing import Dict, Optional
+
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 
-BASE = "microsoft/phi-3-mini-4k-instruct"
-ADAPTERS_DIR = os.getenv("ADAPTERS_DIR", "/app/adapters")
-ADAPTER_NAMES = ["agent_a", "agent_b", "agent_c"]
+BASE_MODEL_NAME = os.getenv("BASE_MODEL", "microsoft/phi-3-mini-4k-instruct")
+ADAPTERS_DIR = os.getenv("ADAPTERS_DIR", "/app/adapters")  # set in compose
 
-bnb = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_use_double_quant=True,
-    bnb_4bit_compute_dtype=(
-        torch.bfloat16 if torch.cuda.is_available() else torch.float16
-    ),
-)
-
-_tok = AutoTokenizer.from_pretrained(BASE, use_fast=True)
-_tok.pad_token = _tok.eos_token
+# --- Load base model (GPU if available)
+_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+_tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_NAME, use_fast=True)
+if _tokenizer.pad_token is None:
+    _tokenizer.pad_token = _tokenizer.eos_token
 
 _base = AutoModelForCausalLM.from_pretrained(
-    BASE, quantization_config=bnb, device_map="auto"
-)
+    BASE_MODEL_NAME, dtype=_dtype, device_map=None
+).to("cuda" if torch.cuda.is_available() else "cpu")
+_base.eval()
+
+# --- Load/attach all adapters
+# We keep a dict of adapter_name -> attached peft adapter name
+_adapters: Dict[str, str] = {}
 
 
-def _adapter_path(name: str) -> str:
-    return os.path.join(ADAPTERS_DIR, name)
+def _attach_adapter(adapter_path: str, adapter_name: str) -> None:
+    """
+    Attach a PEFT adapter (LoRA) into the base model under a given name.
+    This uses low-level state dict load so we keep one shared base.
+    """
+    # Create a lightweight Peft wrapper just to read its state dict/config
+    tmp = PeftModel.from_pretrained(_base, adapter_path)
+    # Register adapter on the shared base under `adapter_name`
+    _base.load_adapter(adapter_path, adapter_name=adapter_name)
+    _adapters[adapter_name] = adapter_name  # record
+    # Free the temp wrapper (safetensors already read)
+    del tmp
 
 
-def _has_adapter(name: str) -> bool:
-    return os.path.isfile(os.path.join(_adapter_path(name), "adapter_config.json"))
+# Discover subfolders with adapter_config.json
+for p in sorted(glob.glob(os.path.join(ADAPTERS_DIR, "*"))):
+    cfg = os.path.join(p, "adapter_config.json")
+    if os.path.isfile(cfg):
+        name = os.path.basename(p)
+        try:
+            _attach_adapter(p, name)
+            print(f"[LLM] Loaded adapter: {name} from {p}")
+        except Exception as e:
+            print(f"[LLM] Skipped adapter at {p}: {e}")
+
+print(f"[LLM] Base model: {BASE_MODEL_NAME} | Adapters: {list(_adapters)}")
 
 
-# Collect available adapters
-_available = [n for n in ADAPTER_NAMES if _has_adapter(n)]
-
-if _available:
-    first = _available[0]
-    _model = PeftModel.from_pretrained(_base, _adapter_path(first), adapter_name=first)
-    for n in _available[1:]:
-        _model.load_adapter(_adapter_path(n), adapter_name=n)
-    print(f"[LLM] Loaded adapters: {', '.join(_available)}")
-else:
-    _model = _base
-    print("[LLM] No adapters found; running base model only.")
+def set_active_adapter(name: Optional[str]) -> None:
+    """
+    Switch active adapter. name=None disables adapters (base-only).
+    """
+    if name is None:
+        _base.set_adapter(None)
+        return
+    if name not in _adapters:
+        raise ValueError(f"Unknown adapter: {name}. Available={list(_adapters)}")
+    _base.set_adapter(name)
 
 
+@torch.inference_mode()
 def generate(
     prompt: str,
-    adapter: str | None,
+    adapter: Optional[str],
     max_new_tokens: int = 256,
     temperature: float = 0.7,
 ) -> str:
-    if isinstance(_model, PeftModel) and adapter in _available:
-        _model.set_adapter(adapter)
-    inputs = _tok(prompt, return_tensors="pt").to(_model.device)
-    with torch.inference_mode():
-        out = _model.generate(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            temperature=temperature,
-        )
-    return _tok.decode(out[0], skip_special_tokens=True)
+    set_active_adapter(adapter)
+    inputs = _tokenizer(prompt, return_tensors="pt").to(_base.device)
+    out = _base.generate(
+        **inputs,
+        do_sample=temperature > 0.0,
+        temperature=temperature,
+        max_new_tokens=max_new_tokens,
+        pad_token_id=_tokenizer.eos_token_id,
+    )
+    return _tokenizer.decode(out[0], skip_special_tokens=True)
